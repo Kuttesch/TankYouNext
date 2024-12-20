@@ -8,7 +8,7 @@ import robocode.RobotDeathEvent;
 import robocode.ScannedRobotEvent;
 import robocode.util.Utils;
 
-public class MissleToe extends AdvancedRobot {
+public class _new_old_new_old_MissleToe extends AdvancedRobot {
     private HashMap<String, EnemyRobot> enemies = new HashMap<>();
     private EnemyRobot targetEnemy;
     private static final int WALL_BUFFER = 35;
