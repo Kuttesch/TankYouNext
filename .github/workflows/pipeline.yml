@@ -38,6 +38,12 @@ jobs:
         git clone https://$GITLAB_USERNAME:$GITLAB_ACCESS_TOKEN@inf-git.th-rosenheim.de/robocode/robots2024/robots.git gitlab-repo
         cp -r build/* gitlab-repo/robots/
         cd gitlab-repo
+        git config user.name "$GITLAB_USERNAME"
+        git config user.email "${{ secrets.GITLAB_EMAIL }}"
+
+        # Pull the latest changes from the remote repository
+        git pull origin main
+
         git add .
         git commit -m "Pipeline: Compile and push to GitLab"
         git push
