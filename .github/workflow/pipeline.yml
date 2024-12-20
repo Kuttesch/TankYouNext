@@ -1,0 +1,43 @@
+name: Compile and Push to GitLab
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up JDK 8 (Amazon Corretto)
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'corretto'
+        java-version: '8'
+
+    - name: Compile Java files
+      run: |
+        mkdir -p build
+        javac -cp libs/robocode.jar -d build src/robocode/MissleToe.java
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "${{ secrets.GITLAB_USERNAME }}"
+        git config --global user.email "${{ secrets.GITLAB_EMAIL }}"
+
+    - name: Push to GitLab
+      if: contains(github.event.head_commit.message, 'DEPLOY')
+      env:
+      GITLAB_USERNAME: ${{ secrets.GITLAB_USERNAME }}
+      GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
+      run: |
+      git clone https://$GITLAB_USERNAME:$GITLAB_ACCESS_TOKEN@inf-git.th-rosenheim.de:robocode/robots2024/robots.git gitlab-repo
+      cp -r build/robocode/* gitlab-repo/TankYouNext/
+      cd gitlab-repo
+      git add .
+      git commit -m "Pipeline: Compile and push to GitLab"
+      git push
