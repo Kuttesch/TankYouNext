@@ -1,162 +1,120 @@
 package TankYouNext;
 
 import robocode.*;
-import java.awt.*;
-import java.awt.geom.*;
-import java.util.HashMap;
-import java.util.Map;
 import robocode.util.Utils;
 
-public class MissleToe extends AdvancedRobot {
-    private static final double WALL_MARGIN = 18; 
-    private static final double MAX_BULLET_POWER = 3.0;
-    private static final double MIN_BULLET_POWER = 1.0;
-    private static final double CIRCLE_RADIUS = 150;
-    private static final double CHANGE_DIRECTION_PROBABILITY = 0.02;
-    private static final int FIRE_DISTANCE = 400;
-    
-    private double moveDirection = 1;
-    private Map<String, EnemyBot> enemies = new HashMap<>();
-    private EnemyBot target;
+import java.awt.Color;
+import java.util.Random;
 
+public class MissleToe extends AdvancedRobot {
+
+    boolean movingForward;
+
+    @Override
     public void run() {
-        setColors(Color.RED, Color.BLACK, Color.WHITE); // Set robot colors
+        setAdjustRadarForRobotTurn(true);
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
         
+        movingForward = true;
+
         while (true) {
-            scanForEnemies();
-            moveBot();
-            aimAndFire();
-            execute();
+            setTurnRadarRight(360); // Keep scanning the radar
+            colorize(); // Randomize colors
+            runRandomMovement(); // Randomize movement
+            execute(); // Perform actions
+
+            // Call to the random movement and fire strategy
+            if (movingForward) {
+                ahead(100);
+            } else {
+                back(100);
+            }
+            movingForward = !movingForward; // Alternate movement direction
         }
     }
 
-    private void scanForEnemies() {
-        if (getRadarTurnRemaining() == 0) {
-            setTurnRadarRight(Double.POSITIVE_INFINITY);
-        }
+    // Perform random movement (from original MissleToe and Leopard3)
+    public void runRandomMovement() {
+        setAhead(Math.random() * 200);
+        setTurnRight(Math.random() * 360);
     }
 
+    // Targeting the predicted position of the enemy (from MissleToe)
+    @Override
     public void onScannedRobot(ScannedRobotEvent e) {
-        String enemyName = e.getName();
+        double bearing = e.getBearingRadians();
         double distance = e.getDistance();
-        
-        if (!enemies.containsKey(enemyName)) {
-            enemies.put(enemyName, new EnemyBot());
-        }
-        
-        EnemyBot enemy = enemies.get(enemyName);
-        enemy.update(e, this);
-        
-        if (target == null || distance < target.getDistance()) {
-            target = enemy;
-        }
-        
-        double angleToEnemy = getHeadingRadians() + e.getBearingRadians();
-        double radarTurn = Utils.normalRelativeAngle(angleToEnemy - getRadarHeadingRadians());
-        setTurnRadarRightRadians(2 * radarTurn);
+        double enemySpeed = e.getVelocity();
+        double enemyHeading = e.getHeadingRadians();
+
+        double absoluteBearing = getHeadingRadians() + bearing;
+
+        // Calculate enemy's current position
+        double enemyX = getX() + Math.sin(absoluteBearing) * distance;
+        double enemyY = getY() + Math.cos(absoluteBearing) * distance;
+
+        // Predict future position of the enemy
+        double timeDelta = 10;
+        double futureX = enemyX + Math.sin(enemyHeading) * enemySpeed * timeDelta;
+        double futureY = enemyY + Math.cos(enemyHeading) * enemySpeed * timeDelta;
+
+        aimGunAt(futureX, futureY); // Aim at the predicted position
+
+        // Fire based on distance
+        double firePower = Math.min(500.0 / distance, 3.0);
+        fire(firePower); // Adjust firepower based on enemy distance
     }
 
-    public void onHitByBullet(HitByBulletEvent e) {
-        moveDirection = -moveDirection; // Change movement direction on hit
-    }
-
-    public void onHitWall(HitWallEvent e) {
-        moveDirection = -moveDirection; // Change movement direction on wall hit
-    }
-
-    private void moveBot() {
-        double x = getX();
-        double y = getY();
-        double width = getBattleFieldWidth();
-        double height = getBattleFieldHeight();
-
-        if (x < WALL_MARGIN || x > width - WALL_MARGIN || y < WALL_MARGIN || y > height - WALL_MARGIN) {
-            moveDirection = -moveDirection;
-        }
-
-        if (Math.random() < CHANGE_DIRECTION_PROBABILITY) {
-            moveDirection = -moveDirection;
-        }
-
-        setAhead(moveDirection * 100);
-        setTurnRightRadians(Math.sin(getTime() / 20.0));
-    }
-
-    private void aimAndFire() {
-        if (target == null) {
-            return;
-        }
-
-        double absoluteBearing = getHeadingRadians() + target.getBearingRadians();
-        double enemyVelocity = target.getVelocity();
-        double bulletPower = Math.min(MAX_BULLET_POWER, Math.max(MIN_BULLET_POWER, FIRE_DISTANCE / target.getDistance()));
-        
-        double predictedX = target.predictX(this);
-        double predictedY = target.predictY(this);
-        double angleToEnemy = Math.atan2(predictedX - getX(), predictedY - getY());
-        double gunTurn = Utils.normalRelativeAngle(angleToEnemy - getGunHeadingRadians());
-        
+    // Aim the gun at the calculated future position (from MissleToe)
+    private void aimGunAt(double x, double y) {
+        double dx = x - getX();
+        double dy = y - getY();
+        double angleToTarget = Math.atan2(dx, dy);
+        double gunTurn = Utils.normalRelativeAngle(angleToTarget - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
-        
-        if (getGunHeat() == 0 && Math.abs(getGunTurnRemaining()) < 10) {
-            setFire(bulletPower);
-        }
     }
 
-    public void onRobotDeath(RobotDeathEvent e) {
-        if (e.getName().equals(target.getName())) {
-            target = null; // Choose a new target if the current one dies
-        }
+    // Randomize robot's colors (from MissleToe)
+    public void colorize() {
+        setBodyColor(calculateRandomColor());
+        setGunColor(calculateRandomColor());
+        setRadarColor(calculateRandomColor());
+        setBulletColor(calculateRandomColor());
+        setScanColor(calculateRandomColor());
     }
 
-    static class EnemyBot {
-        private String name;
-        private double x, y;
-        private double bearingRadians;
-        private double distance;
-        private double headingRadians;
-        private double velocity;
-        private long lastSeen;
+    // Generate a random color (from MissleToe)
+    public Color calculateRandomColor() {
+        int red = (int) (Math.random() * 256);
+        int green = (int) (Math.random() * 256);
+        int blue = (int) (Math.random() * 256);
+        return new Color(red, green, blue);
+    }
 
-        public void update(ScannedRobotEvent e, AdvancedRobot bot) {
-            this.name = e.getName();
-            this.bearingRadians = e.getBearingRadians();
-            this.distance = e.getDistance();
-            this.headingRadians = e.getHeadingRadians();
-            this.velocity = e.getVelocity();
-            this.lastSeen = bot.getTime();
-            
-            double angle = bot.getHeadingRadians() + e.getBearingRadians();
-            this.x = bot.getX() + Math.sin(angle) * e.getDistance();
-            this.y = bot.getY() + Math.cos(angle) * e.getDistance();
-        }
+    // Handle hits by bullets (from Leopard4 and Leopard3)
+    @Override
+    public void onHitByBullet(HitByBulletEvent e) {
+        back(50);
+    }
 
-        public double getBearingRadians() {
-            return bearingRadians;
-        }
+    // Handle wall collisions (from Leopard3)
+    @Override
+    public void onHitWall(HitWallEvent e) {
+        back(50);
+        turnRight(90);
+    }
 
-        public double getDistance() {
-            return distance;
-        }
-
-        public double getVelocity() {
-            return velocity;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public double predictX(AdvancedRobot bot) {
-            double time = (bot.getTime() - lastSeen);
-            return x + Math.sin(headingRadians) * velocity * time;
-        }
-
-        public double predictY(AdvancedRobot bot) {
-            double time = (bot.getTime() - lastSeen);
-            return y + Math.cos(headingRadians) * velocity * time;
-        }
+    // Handle robot collisions (from Leopard3)
+    @Override
+    public void onHitRobot(HitRobotEvent e) {
+        double bearing = e.getBearing();
+        double gunTurn = getHeading() - getGunHeading() + bearing;
+        double radarTurn = getHeading() - getRadarHeading() + bearing;
+        turnGunRight(gunTurn);
+        turnRadarRight(radarTurn);
+        fire(3);
+        ahead(10);
+        scan();
     }
 }
