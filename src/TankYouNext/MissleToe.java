@@ -15,7 +15,7 @@ import robocode.ScannedRobotEvent;
 import robocode.WinEvent;
 import robocode.util.Utils;
 
-public class MissleMage extends AdvancedRobot {
+public class MissleToe extends AdvancedRobot {
     private static HashMap<String, EnemyBot> enemies = new HashMap<>();
     private static EnemyBot targetEnemy;
     private static double oldEnemyHeading;
