@@ -45,5 +45,5 @@ jobs:
         git pull origin main
 
         git add .
-        git commit -m "Pipeline: Compile and push to GitLab"
+        git commit -m "Pipeline: Compile and push to GitLab $(date -u)"
         git push
