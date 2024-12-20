@@ -2,7 +2,6 @@ package TankYouNext;
 
 import java.awt.Color;
 import java.util.Random;
-import robocode.util.Utils;
 import robocode.HitByBulletEvent;
 import robocode.HitRobotEvent;
 import robocode.HitWallEvent;
@@ -10,11 +9,6 @@ import robocode.Robot;
 import robocode.ScannedRobotEvent;
 
 public class MissleToe extends Robot {
-
-   private EnemyData Enemy;
-   private double GunHeading;
-   private double RadarHeading;
-
    public void run() {
       this.setAdjustGunForRobotTurn(true);
       this.setAdjustRadarForGunTurn(true);
@@ -51,55 +45,14 @@ public class MissleToe extends Robot {
       double energy = e.getEnergy();
       double bearing = e.getBearing();
       double velocity = e.getVelocity();
-
-      Enemy = new EnemyData();  // Correct instantiation of the EnemyData class
-
-      Enemy.distance = e.getDistance();
-      Enemy.energy = e.getEnergy();
-      Enemy.bearing = e.getBearing();
-      Enemy.velocity = e.getVelocity();
-      Enemy.heading = e.getHeading();
-      Enemy.x = this.getX();
-      Enemy.y = this.getY();
-
-      Enemy.new_x = Enemy.x + Math.sin(Math.toRadians(Enemy.heading)) * Enemy.distance;
-      Enemy.new_y = Enemy.y + Math.cos(Math.toRadians(Enemy.heading)) * Enemy.distance;
-      this.gunToXY(Enemy.new_x, Enemy.new_y);
-
-      if (this.getEnergy() > 50.0D) {
-         this.fire(3.0D);
-      } else {
-         this.fire(1.0D);
-      }
-
-      if(this.checkIfHit(e, Enemy)) {
-         // Fix: Avoid infinite recursion by just scanning again instead of calling onScannedRobot again
-         this.scan();
-      }
-   }
-
-   public boolean checkIfHit(ScannedRobotEvent e, EnemyData Enemy) {
-      if ((Enemy.energy - e.getEnergy()) <= 3.0D && (Enemy.energy - e.getEnergy()) >= 0.1D) {
-         return true;
-      }
-      return false;
-   }
-
-   public void gunToXY(double x, double y) {
-      double dx = x - this.getX();
-      double dy = y - this.getY();
-      double angleToTarget = Math.atan2(dx, dy);
-      double gunTurn = Utils.normalRelativeAngle(angleToTarget - this.getGunHeading());
-      if (gunTurn > 0.0D) {
-         this.turnGunRight(gunTurn);
-      } else {
-         this.turnGunLeft(gunTurn);
-      }
-   }
-
-   // Empty radarLock method can be removed or implemented as necessary
-   public void radarLock() {
-      // Implement radar lock logic if needed, or remove this method.
+      double time = distance / (20.0D - 3.0D * energy);
+      double gunTurn = this.getHeading() - this.getGunHeading() + bearing;
+      double radarTurn = this.getHeading() - this.getRadarHeading() + bearing;
+      this.turnGunRight(gunTurn);
+      this.turnRadarRight(radarTurn);
+      this.fire(3.0D);
+      this.ahead(velocity * time);
+      this.scan();
    }
 
    public void onHitByBullet(HitByBulletEvent e) {
@@ -121,18 +74,4 @@ public class MissleToe extends Robot {
       this.ahead(10.0D);
       this.scan();
    }
-   private class EnemyData {
-      public double distance;
-      public double energy;
-      public double bearing;
-      public double velocity;
-      public double heading;
-      public double x;
-      public double y;
-
-      public double new_x;
-      public double new_y;
 }
-}
-
-
