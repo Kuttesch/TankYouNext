@@ -8,6 +8,7 @@ import java.util.Random;
 public class MissleToe extends AdvancedRobot {
 
     boolean movingForward;
+    boolean radarLocked = false;
 
     @Override
     public void run() {
@@ -20,7 +21,7 @@ public class MissleToe extends AdvancedRobot {
         while (true) {
             setTurnRadarRight(360); // Keep scanning the radar
             colorize(); // Randomize colors
-            runRandomMovement(); // Randomize movement
+            runSmartMovement(); // Use smarter movement
             execute(); // Perform actions
 
             // Call to the random movement and fire strategy
@@ -33,13 +34,30 @@ public class MissleToe extends AdvancedRobot {
 
             // Wall avoidance logic: Check if we are too far from the walls and adjust position.
             avoidWalls();
+
+            // Keep radar locked if an enemy is near
+            if (radarLocked) {
+                setTurnRadarRight(360); // Keep radar locked
+            }
         }
     }
 
-    // Perform random movement (from original MissleToe and Leopard3)
-    public void runRandomMovement() {
-        setAhead(Math.random() * 200);
-        setTurnRight(Math.random() * 360);
+    // Perform random yet smarter movement
+    public void runSmartMovement() {
+        double x = getX();
+        double y = getY();
+        double fieldWidth = getBattleFieldWidth();
+        double fieldHeight = getBattleFieldHeight();
+
+        // Avoid corners by slightly moving towards the center if we are in the edges
+        if (x < 100 || x > fieldWidth - 100 || y < 100 || y > fieldHeight - 100) {
+            double turnDirection = Math.random() * 360;
+            setTurnRight(turnDirection); 
+            setAhead(Math.random() * 150);
+        } else {
+            setAhead(Math.random() * 100);
+            setTurnRight(Math.random() * 180);
+        }
     }
 
     // Targeting the predicted position of the enemy (from MissleToe)
@@ -63,9 +81,23 @@ public class MissleToe extends AdvancedRobot {
 
         aimGunAt(futureX, futureY); // Aim at the predicted position
 
-        // Fire based on distance
-        double firePower = Math.min(500.0 / distance, 3.0);
+        // Fire based on distance with adaptive firepower
+        double firePower = calculateAdaptiveFirePower(distance);
         fire(firePower); // Adjust firepower based on enemy distance
+
+        // Lock the radar when an enemy is detected
+        radarLocked = true;
+    }
+
+    // Adaptive firepower calculation based on distance
+    private double calculateAdaptiveFirePower(double distance) {
+        if (distance < 100) {
+            return 3.0; // Fire at max power if close
+        } else if (distance < 300) {
+            return 2.0; // Medium power at mid-range
+        } else {
+            return 1.0; // Lower power at long range
+        }
     }
 
     // Aim the gun at the calculated future position (from MissleToe)
@@ -123,8 +155,8 @@ public class MissleToe extends AdvancedRobot {
 
     // Bullet-dodging logic
     private void dodgeBullet() {
-        // Simple strategy to dodge the bullet: move perpendicular to the incoming bullet.
-        double bulletHeading = getGunHeadingRadians(); // Assume the bullet's direction is from the gun's heading.
+        // Predict the bullet’s trajectory and move accordingly
+        double bulletHeading = getGunHeadingRadians(); // Assume the bullet's direction is from the gun's heading
         double dodgeDirection = bulletHeading + Math.PI / 2; // 90 degrees away from bullet
 
         // Move in a direction to dodge
