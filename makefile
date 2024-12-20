@@ -13,6 +13,6 @@ copy:
 	cp $(SRC)/MissleToe.class $(TARGET_DIR)
 
 clean:
-	rm -rf $(SRC)/*.class $(TARGET_DIR)
+	Remove-Item -Recurse -Force $(SRC)/*.class, $(TARGET_DIR)
 
 .PHONY: all compile copy clean
