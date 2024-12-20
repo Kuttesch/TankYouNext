@@ -20,7 +20,7 @@ public class MissleToeV420 extends AdvancedRobot {
     // Movement control
     private static Point2D.Double currentPosition = new Point2D.Double();
     private static Point2D.Double travelDestination = new Point2D.Double();
-    private static final int WALL_BUFFER = 35;
+    private static final int WALL_BUFFER = 50;  // Increased buffer to avoid the edges in larger fields
 
     // Radar and time tracking
     private static long lastRadarTime;
@@ -144,6 +144,7 @@ public class MissleToeV420 extends AdvancedRobot {
     private double calculateRisk(Point2D.Double point) {
         double risk = 0;
 
+        // Less risk when closer to the center, but more risk when near enemies.
         risk += 1.0 / point.distanceSq(battlefieldCenter);
 
         for (EnemyBot enemy : enemies.values()) {
