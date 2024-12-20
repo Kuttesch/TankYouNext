@@ -36,7 +36,7 @@ jobs:
         GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
       run: |
         git clone https://$GITLAB_USERNAME:$GITLAB_ACCESS_TOKEN@inf-git.th-rosenheim.de/robocode/robots2024/robots.git gitlab-repo
-        cp -r build/* gitlab-repo/robots/
+        cp -r build/* gitlab-repo/TankYouNext/
         cd gitlab-repo
         git config user.name "$GITLAB_USERNAME"
         git config user.email "${{ secrets.GITLAB_EMAIL }}"
