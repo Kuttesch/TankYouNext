@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Launch Robocode",
+      "request": "launch",
+      "mainClass": "robocode.Robocode",
+      "classPaths": [
+        "libs/robocode.jar",
+        "bin"
+      ]
+    }
+  ]
+}

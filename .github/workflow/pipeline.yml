@@ -22,7 +22,7 @@ jobs:
     - name: Compile Java files
       run: |
         mkdir -p build
-        javac -cp libs/robocode.jar -d build src/robocode/MissleToe.java
+        javac -cp libs/robocode.jar -d build src/TankYouNext/MissleToe.java
 
     - name: Configure Git
       run: |
@@ -36,7 +36,7 @@ jobs:
       GITLAB_ACCESS_TOKEN: ${{ secrets.GITLAB_ACCESS_TOKEN }}
       run: |
       git clone https://$GITLAB_USERNAME:$GITLAB_ACCESS_TOKEN@inf-git.th-rosenheim.de:robocode/robots2024/robots.git gitlab-repo
-      cp -r build/robocode/* gitlab-repo/TankYouNext/
+      cp -r build/* gitlab-repo/robots/
       cd gitlab-repo
       git add .
       git commit -m "Pipeline: Compile and push to GitLab"
