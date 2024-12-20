@@ -3,11 +3,10 @@ package TankYouNext;
 import java.awt.Color;
 import java.awt.geom.Point2D;
 import java.util.HashMap;
-import java.util.Iterator;
 import robocode.*;
 import robocode.util.Utils;
 
-public class MissleToe extends AdvancedRobot {
+public class MissleToeV420 extends AdvancedRobot {
 
     // Enemy tracking
     private static HashMap<String, EnemyBot> enemies = new HashMap<>();
@@ -60,8 +59,10 @@ public class MissleToe extends AdvancedRobot {
         currentPosition.setLocation(this.getX(), this.getY());
         double absoluteBearing = this.getHeadingRadians() + e.getBearingRadians();
         double distance = e.getDistance();
+        double velocity = e.getVelocity();
+        double heading = e.getHeadingRadians();
 
-        enemy.update(currentPosition, absoluteBearing, distance, e.getEnergy());
+        enemy.update(currentPosition, absoluteBearing, distance, e.getEnergy(), velocity, heading);
 
         // Determine target priority
         if (targetEnemy == null || enemy.isHigherPriority(targetEnemy)) {
@@ -75,15 +76,24 @@ public class MissleToe extends AdvancedRobot {
     }
 
     private void aimAndFire(EnemyBot enemy) {
-        double gunTurn = Utils.normalRelativeAngle(Math.atan2(
-            enemy.position.getX() - currentPosition.getX(),
-            enemy.position.getY() - currentPosition.getY()) - this.getGunHeadingRadians());
+        // Determine the power of the bullet based on the robot's energy
+        double bulletPower = Math.min(3.0, Math.max(0.1, this.getEnergy() / 5));
+        double bulletSpeed = 20 - 3 * bulletPower;  // Speed of the bullet
+        double timeToHit = enemy.position.distance(currentPosition) / bulletSpeed;  // Time it will take for the bullet to reach the enemy
 
+        // Predict the future position of the enemy based on its velocity and heading
+        double predictedX = enemy.position.getX() + enemy.velocity * timeToHit * Math.sin(enemy.heading);
+        double predictedY = enemy.position.getY() + enemy.velocity * timeToHit * Math.cos(enemy.heading);
+
+        // Calculate the angle to aim the gun towards the predicted position
+        double gunTurn = Utils.normalRelativeAngle(Math.atan2(predictedX - currentPosition.getX(), predictedY - currentPosition.getY()) - this.getGunHeadingRadians());
+
+        // Turn the gun towards the predicted position
         this.setTurnGunRightRadians(gunTurn);
 
+        // If the gun is ready to fire, fire at the predicted position
         if (this.getGunHeat() == 0.0 && Math.abs(this.getGunTurnRemaining()) < 10) {
-            double firePower = Math.min(3.0, Math.max(0.1, this.getEnergy() / 5));
-            this.setFire(firePower);
+            this.setFire(bulletPower);
         }
     }
 
@@ -155,16 +165,21 @@ public class MissleToe extends AdvancedRobot {
         this.setTurnRight(90);
     }
 
+    // Updated EnemyBot class with velocity and heading
     private static class EnemyBot {
         Point2D.Double position = new Point2D.Double();
         double energy;
+        double velocity;
+        double heading;
 
-        void update(Point2D.Double currentPosition, double absoluteBearing, double distance, double energy) {
+        void update(Point2D.Double currentPosition, double absoluteBearing, double distance, double energy, double velocity, double heading) {
             this.position.setLocation(
                 currentPosition.getX() + Math.sin(absoluteBearing) * distance,
                 currentPosition.getY() + Math.cos(absoluteBearing) * distance
             );
             this.energy = energy;
+            this.velocity = velocity;
+            this.heading = heading;
         }
 
         boolean isHigherPriority(EnemyBot other) {
