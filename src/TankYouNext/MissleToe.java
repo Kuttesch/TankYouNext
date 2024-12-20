@@ -1,78 +1,73 @@
 package TankYouNext;
 
-import java.awt.Color;
-import java.util.Random;
+import robocode.AdvancedRobot;
 import robocode.HitByBulletEvent;
-import robocode.HitRobotEvent;
-import robocode.HitWallEvent;
-import robocode.Robot;
 import robocode.ScannedRobotEvent;
 
-public class MissleToe extends Robot {
+public class MissleToe extends AdvancedRobot {
+   boolean movingForward;
+
    public void run() {
-      this.setAdjustGunForRobotTurn(true);
-      this.setAdjustRadarForGunTurn(true);
       this.setAdjustRadarForRobotTurn(true);
+      this.setAdjustGunForRobotTurn(true);
+      this.setAhead(10000.0D);
+      this.movingForward = true;
 
       while(true) {
-         this.turnRadarRight(360.0D);
-         this.turnGunRight(360.0D);
-         int red = (int)(Math.random() * 255.0D);
-         int green = (int)(Math.random() * 255.0D);
-         int blue = (int)(Math.random() * 255.0D);
-         this.setColors(new Color(red, green, blue), new Color(red, green, blue), new Color(red, green, blue));
-         this.movement();
+         this.turnRadarRightRadians(Double.POSITIVE_INFINITY);
       }
-   }
-
-   public void movement() {
-      Random random = new Random();
-      int max_turn = 135;
-      int min_turn = 0;
-      int randomDegree = random.nextInt(max_turn - min_turn + 1);
-      int randomDirection = random.nextInt(2);
-      if (randomDirection == 0) {
-         this.turnRight((double)randomDegree);
-      } else {
-         this.turnLeft((double)randomDegree);
-      }
-
-      this.ahead(50.0D);
    }
 
    public void onScannedRobot(ScannedRobotEvent e) {
-      double distance = e.getDistance();
-      double energy = e.getEnergy();
-      double bearing = e.getBearing();
-      double velocity = e.getVelocity();
-      double time = distance / (20.0D - 3.0D * energy);
-      double gunTurn = this.getHeading() - this.getGunHeading() + bearing;
-      double radarTurn = this.getHeading() - this.getRadarHeading() + bearing;
-      this.turnGunRight(gunTurn);
-      this.turnRadarRight(radarTurn);
-      this.fire(3.0D);
-      this.ahead(velocity * time);
-      this.scan();
+      double enemyBearing = this.getHeading() + e.getBearing();
+      double enemyX = this.getX() + e.getDistance() * Math.sin(Math.toRadians(enemyBearing));
+      double enemyY = this.getY() + e.getDistance() * Math.cos(Math.toRadians(enemyBearing));
+      double dx = enemyX - this.getX();
+      double dy = enemyY - this.getY();
+      double theta = Math.toDegrees(Math.atan2(dx, dy));
+      this.turnRadarRight(this.normalizeBearing(this.getHeading() - (this.getRadarHeading() + e.getBearing())));
+      double gunTurnAmt = this.normalizeBearing(theta - this.getGunHeading());
+      this.setTurnGunRight(gunTurnAmt);
+      if (Math.abs(gunTurnAmt) <= 3.0D) {
+         this.setFire(Math.min(500.0D / e.getDistance(), 3.0D));
+      }
+
+      if (e.getDistance() > 150.0D) {
+         if (this.movingForward) {
+            this.setTurnRight(this.normalizeBearing(enemyBearing + 80.0D));
+         } else {
+            this.setTurnRight(this.normalizeBearing(enemyBearing + 100.0D));
+         }
+      } else if (this.movingForward) {
+         this.setBack(40.0D);
+         this.movingForward = false;
+      } else {
+         this.setAhead(40.0D);
+         this.movingForward = true;
+      }
+
    }
 
    public void onHitByBullet(HitByBulletEvent e) {
-      this.back(50.0D);
+      if (this.movingForward) {
+         this.setBack(10000.0D);
+         this.movingForward = false;
+      } else {
+         this.setAhead(10000.0D);
+         this.movingForward = true;
+      }
+
    }
 
-   public void onHitWall(HitWallEvent e) {
-      this.back(50.0D);
-      this.turnRight(90.0D);
-   }
+   double normalizeBearing(double angle) {
+      while(angle > 180.0D) {
+         angle -= 360.0D;
+      }
 
-   public void onHitRobot(HitRobotEvent e) {
-      double bearing = e.getBearing();
-      double gunTurn = this.getHeading() - this.getGunHeading() + bearing;
-      double radarTurn = this.getHeading() - this.getRadarHeading() + bearing;
-      this.turnGunRight(gunTurn);
-      this.turnRadarRight(radarTurn);
-      this.fire(3.0D);
-      this.ahead(10.0D);
-      this.scan();
+      while(angle < -180.0D) {
+         angle += 360.0D;
+      }
+
+      return angle;
    }
 }
-    
