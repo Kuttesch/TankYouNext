@@ -2,6 +2,7 @@ package TankYouNext;
 
 import java.awt.Color;
 import java.util.Random;
+import robocode.util.Utils;
 import robocode.HitByBulletEvent;
 import robocode.HitRobotEvent;
 import robocode.HitWallEvent;
@@ -120,17 +121,18 @@ public class MissleToe extends Robot {
       this.ahead(10.0D);
       this.scan();
    }
+   private class EnemyData {
+      public double distance;
+      public double energy;
+      public double bearing;
+      public double velocity;
+      public double heading;
+      public double x;
+      public double y;
+
+      public double new_x;
+      public double new_y;
+}
 }
 
-private class EnemyData {
-   public double distance;
-   public double energy;
-   public double bearing;
-   public double velocity;
-   public double heading;
-   public double x;
-   public double y;
 
-   public double new_x;
-   public double new_y;
-}
