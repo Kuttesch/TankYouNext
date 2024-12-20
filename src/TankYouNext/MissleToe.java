@@ -4,140 +4,171 @@ import java.awt.Color;
 import java.awt.geom.Point2D;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Random;
-import robocode.AdvancedRobot;
-import robocode.HitByBulletEvent;
-import robocode.HitRobotEvent;
-import robocode.HitWallEvent;
-import robocode.RobotDeathEvent;
-import robocode.Rules;
-import robocode.ScannedRobotEvent;
-import robocode.WinEvent;
+import robocode.*;
 import robocode.util.Utils;
 
 public class MissleToe extends AdvancedRobot {
+
+    // Enemy tracking
     private static HashMap<String, EnemyBot> enemies = new HashMap<>();
     private static EnemyBot targetEnemy;
-    private static double oldEnemyHeading;
-    private static Point2D.Double travelDestination = new Point2D.Double();
-    private static Point2D.Double currentPosition = new Point2D.Double();
+
+    // Battlefield info
     private static double battlefieldWidth;
     private static double battlefieldHeight;
-    private Random random = new Random();
+    private static Point2D.Double battlefieldCenter;
+
+    // Movement control
+    private static Point2D.Double currentPosition = new Point2D.Double();
+    private static Point2D.Double travelDestination = new Point2D.Double();
+    private static final int WALL_BUFFER = 35;
+
+    // Radar and time tracking
+    private static long lastRadarTime;
+    private static final int RADAR_DELAY = 20;
+    private static long time;
 
     public void run() {
-        this.setColors(new Color(48, 32, 91), new Color(107, 66, 119), new Color(107, 66, 119), new Color(225, 248, 250), new Color(121, 199, 243));
+        // Initialization
+        this.setColors(Color.CYAN, Color.BLUE, Color.DARK_GRAY, Color.YELLOW, Color.WHITE);
         this.setAdjustGunForRobotTurn(true);
         this.setAdjustRadarForGunTurn(true);
         battlefieldWidth = this.getBattleFieldWidth();
         battlefieldHeight = this.getBattleFieldHeight();
+        battlefieldCenter = new Point2D.Double(battlefieldWidth / 2.0, battlefieldHeight / 2.0);
+
+        this.setTurnRadarRight(Double.POSITIVE_INFINITY);
 
         while (true) {
-            currentPosition.setLocation(this.getX(), this.getY());
-            if (this.getRadarTurnRemaining() == 0.0D) {
+            time = this.getTime();
+            calculateMovement();
+            if (this.getRadarTurnRemaining() == 0.0) {
                 this.setTurnRadarRight(Double.POSITIVE_INFINITY);
             }
-
-            this.moveStrategically();
             this.execute();
         }
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
+        // Track enemy info
         EnemyBot enemy = enemies.get(e.getName());
         if (enemy == null) {
-            enemies.put(e.getName(), enemy = new EnemyBot());
+            enemy = new EnemyBot();
+            enemies.put(e.getName(), enemy);
         }
 
+        currentPosition.setLocation(this.getX(), this.getY());
         double absoluteBearing = this.getHeadingRadians() + e.getBearingRadians();
-        enemy.updatePosition(currentPosition.getX() + Math.sin(absoluteBearing) * e.getDistance(),
-                currentPosition.getY() + Math.cos(absoluteBearing) * e.getDistance());
-        enemy.energy = e.getEnergy();
-        enemy.distance = e.getDistance();
-        enemy.attraction = e.getEnergy() < 20.0D ? e.getDistance() * 0.75D : e.getDistance();
+        double distance = e.getDistance();
 
-        if (targetEnemy == null || enemy.attraction < targetEnemy.attraction) {
+        enemy.update(currentPosition, absoluteBearing, distance, e.getEnergy());
+
+        // Determine target priority
+        if (targetEnemy == null || enemy.isHigherPriority(targetEnemy)) {
             targetEnemy = enemy;
         }
 
-        if (targetEnemy == enemy) {
-            double bulletPower = Math.min(3.0D, Math.max(0.1D, (20.0 - e.getDistance()) / 10.0D));
-            double gunTurn = Utils.normalRelativeAngle(absoluteBearing - this.getGunHeadingRadians());
-            this.setTurnGunRightRadians(gunTurn);
+        // Targeting and firing
+        if (targetEnemy != null) {
+            aimAndFire(targetEnemy);
+        }
+    }
 
-            if (this.getGunHeat() == 0.0D && Math.abs(this.getGunTurnRemainingRadians()) < 0.1D) {
-                this.setFire(bulletPower);
+    private void aimAndFire(EnemyBot enemy) {
+        double gunTurn = Utils.normalRelativeAngle(Math.atan2(
+            enemy.position.getX() - currentPosition.getX(),
+            enemy.position.getY() - currentPosition.getY()) - this.getGunHeadingRadians());
+
+        this.setTurnGunRightRadians(gunTurn);
+
+        if (this.getGunHeat() == 0.0 && Math.abs(this.getGunTurnRemaining()) < 10) {
+            double firePower = Math.min(3.0, Math.max(0.1, this.getEnergy() / 5));
+            this.setFire(firePower);
+        }
+    }
+
+    private void calculateMovement() {
+        double risk;
+        double minRisk = Double.MAX_VALUE;
+
+        Point2D.Double bestDestination = null;
+
+        for (double angle = 0; angle < 2 * Math.PI; angle += Math.PI / 8) {
+            Point2D.Double candidate = new Point2D.Double(
+                currentPosition.getX() + Math.sin(angle) * 100,
+                currentPosition.getY() + Math.cos(angle) * 100
+            );
+
+            if (!isInsideBattlefield(candidate)) {
+                continue;
             }
 
-            double radarTurn = Utils.normalRelativeAngle(absoluteBearing - this.getRadarHeadingRadians()) * 2;
-            this.setTurnRadarRightRadians(radarTurn);
+            risk = calculateRisk(candidate);
+
+            if (risk < minRisk) {
+                minRisk = risk;
+                bestDestination = candidate;
+            }
         }
+
+        if (bestDestination != null) {
+            travelDestination.setLocation(bestDestination);
+            moveToDestination(bestDestination);
+        }
+    }
+
+    private void moveToDestination(Point2D.Double destination) {
+        double angle = Utils.normalRelativeAngle(Math.atan2(
+            destination.getX() - currentPosition.getX(),
+            destination.getY() - currentPosition.getY()) - this.getHeadingRadians());
+
+        this.setTurnRightRadians(Math.atan(Math.tan(angle)));
+        this.setAhead(currentPosition.distance(destination) * (angle == Math.atan(Math.tan(angle)) ? 1 : -1));
+    }
+
+    private boolean isInsideBattlefield(Point2D.Double point) {
+        return point.getX() > WALL_BUFFER && point.getX() < battlefieldWidth - WALL_BUFFER
+            && point.getY() > WALL_BUFFER && point.getY() < battlefieldHeight - WALL_BUFFER;
+    }
+
+    private double calculateRisk(Point2D.Double point) {
+        double risk = 0;
+
+        risk += 1.0 / point.distanceSq(battlefieldCenter);
+
+        for (EnemyBot enemy : enemies.values()) {
+            risk += 100.0 / point.distanceSq(enemy.position);
+        }
+
+        return risk;
     }
 
     public void onRobotDeath(RobotDeathEvent e) {
         enemies.remove(e.getName());
-        if (targetEnemy != null && targetEnemy.name.equals(e.getName())) {
+        if (e.getName().equals(targetEnemy)) {
             targetEnemy = null;
         }
     }
 
-    public void onHitByBullet(HitByBulletEvent e) {
-        this.setBack(50);
-        this.setTurnRight(random.nextInt(90));
-    }
-
     public void onHitWall(HitWallEvent e) {
-        double bearing = Utils.normalRelativeAngle(this.getHeadingRadians() - e.getBearingRadians());
         this.setBack(50);
-        this.setTurnRightRadians(bearing);
-    }
-
-    public void onHitRobot(HitRobotEvent e) {
-        double bearing = this.getHeadingRadians() + e.getBearingRadians();
-        this.setBack(20);
-        this.setTurnRightRadians(Utils.normalRelativeAngle(bearing));
-    }
-
-    private void moveStrategically() {
-        if (targetEnemy != null) {
-            double distance = Math.max(100, targetEnemy.distance * 0.5);
-            double angle = Utils.normalRelativeAngle(Math.atan2(currentPosition.getX() - targetEnemy.x,
-                    currentPosition.getY() - targetEnemy.y) - this.getHeadingRadians());
-            this.setTurnRightRadians(angle);
-            this.setAhead(distance);
-        } else {
-            this.randomMovement();
-        }
-    }
-
-    private void randomMovement() {
-        int turnAngle = random.nextInt(135);
-        if (random.nextBoolean()) {
-            this.setTurnRight(turnAngle);
-        } else {
-            this.setTurnLeft(turnAngle);
-        }
-
-        this.setAhead(50);
-    }
-
-    public void onWin(WinEvent e) {
-        this.setTurnRight(Double.POSITIVE_INFINITY);
-        this.setTurnGunRight(Double.NEGATIVE_INFINITY);
-        this.setScanColor(new Color(121, 199, 243));
+        this.setTurnRight(90);
     }
 
     private static class EnemyBot {
-        String name;
-        double x;
-        double y;
+        Point2D.Double position = new Point2D.Double();
         double energy;
-        double distance;
-        double attraction;
 
-        void updatePosition(double x, double y) {
-            this.x = x;
-            this.y = y;
+        void update(Point2D.Double currentPosition, double absoluteBearing, double distance, double energy) {
+            this.position.setLocation(
+                currentPosition.getX() + Math.sin(absoluteBearing) * distance,
+                currentPosition.getY() + Math.cos(absoluteBearing) * distance
+            );
+            this.energy = energy;
+        }
+
+        boolean isHigherPriority(EnemyBot other) {
+            return this.energy < other.energy;
         }
     }
 }
