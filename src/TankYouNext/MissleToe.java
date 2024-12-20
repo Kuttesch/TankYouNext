@@ -2,7 +2,6 @@ package TankYouNext;
 
 import robocode.*;
 import robocode.util.Utils;
-
 import java.awt.Color;
 import java.util.Random;
 
@@ -31,6 +30,9 @@ public class MissleToe extends AdvancedRobot {
                 back(100);
             }
             movingForward = !movingForward; // Alternate movement direction
+
+            // Wall avoidance logic: Check if we are too far from the walls and adjust position.
+            avoidWalls();
         }
     }
 
@@ -95,7 +97,8 @@ public class MissleToe extends AdvancedRobot {
     // Handle hits by bullets (from Leopard4 and Leopard3)
     @Override
     public void onHitByBullet(HitByBulletEvent e) {
-        back(50);
+        back(50); // Move away after being hit
+        dodgeBullet(); // Implement dodge if necessary
     }
 
     // Handle wall collisions (from Leopard3)
@@ -116,5 +119,35 @@ public class MissleToe extends AdvancedRobot {
         fire(3);
         ahead(10);
         scan();
+    }
+
+    // Bullet-dodging logic
+    private void dodgeBullet() {
+        // Simple strategy to dodge the bullet: move perpendicular to the incoming bullet.
+        double bulletHeading = getGunHeadingRadians(); // Assume the bullet's direction is from the gun's heading.
+        double dodgeDirection = bulletHeading + Math.PI / 2; // 90 degrees away from bullet
+
+        // Move in a direction to dodge
+        setTurnRightRadians(Utils.normalRelativeAngle(dodgeDirection - getHeadingRadians()));
+        setAhead(150); // Move away quickly
+    }
+
+    // Keep robot near the walls
+    private void avoidWalls() {
+        double wallMargin = 100; // Distance from the wall where we want to stay
+        if (getX() < wallMargin) {
+            setTurnRight(90); // Turn toward the wall
+            setAhead(50); // Move toward the wall
+        } else if (getX() > getBattleFieldWidth() - wallMargin) {
+            setTurnLeft(90); // Turn toward the wall
+            setAhead(50); // Move toward the wall
+        }
+        if (getY() < wallMargin) {
+            setTurnRight(90); // Turn toward the wall
+            setAhead(50); // Move toward the wall
+        } else if (getY() > getBattleFieldHeight() - wallMargin) {
+            setTurnLeft(90); // Turn toward the wall
+            setAhead(50); // Move toward the wall
+        }
     }
 }
