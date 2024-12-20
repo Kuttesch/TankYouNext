@@ -1,126 +1,110 @@
 package TankYouNext;
 
 import java.awt.Color;
+import java.awt.geom.Point2D;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import robocode.HitByBulletEvent;
-import robocode.HitRobotEvent;
-import robocode.HitWallEvent;
-import robocode.Robot;
+import robocode.AdvancedRobot;
+import robocode.RobotDeathEvent;
 import robocode.ScannedRobotEvent;
+import robocode.util.Utils;
 
-public class MissleToe extends Robot {
-   private Map<String, Double> enemies = new HashMap<>(); // Store enemy name and risk score
-   private String target = null; // Current target robot
+public class MissleToe extends AdvancedRobot {
+    private HashMap<String, EnemyRobot> enemies = new HashMap<>();
+    private EnemyRobot targetEnemy;
+    private static final int WALL_BUFFER = 35;
 
-   public void run() {
-      this.setAdjustGunForRobotTurn(true);
-      this.setAdjustRadarForGunTurn(true);
-      this.setAdjustRadarForRobotTurn(true);
+    public void run() {
+        setColors(Color.RED, Color.GREEN, Color.BLUE);
+        setAdjustGunForRobotTurn(true);
+        setAdjustRadarForGunTurn(true);
 
-      while (true) {
-         this.turnRadarRight(360.0D); // Scan the battlefield
-         avoidWalls(); // Check and avoid walls
-         target = getHighestRiskTarget(); // Determine the current highest-risk target
-         if (target != null) {
-            trackAndAttackTarget();
-         } else {
-            this.movement(); // Move randomly if no valid target is found
-         }
-      }
-   }
+        while (true) {
+            if (getRadarTurnRemaining() == 0) {
+                setTurnRadarRight(Double.POSITIVE_INFINITY); // Keep scanning
+            }
+            moveStrategically(); // Risk-based movement
+            execute();
+        }
+    }
 
-   private void trackAndAttackTarget() {
-      // Get the bearing of the target and adjust gun/radar to aim
-      double targetBearing = enemies.getOrDefault(target, 0.0);
-      double gunTurn = normalizeAngle(this.getHeading() - this.getGunHeading() + targetBearing);
-      double radarTurn = normalizeAngle(this.getHeading() - this.getRadarHeading() + targetBearing);
-      this.turnGunRight(gunTurn);
-      this.turnRadarRight(radarTurn);
-      this.fire(3.0); // Fire at full power
-   }
+    public void onScannedRobot(ScannedRobotEvent event) {
+        double absBearing = getHeadingRadians() + event.getBearingRadians();
+        Point2D.Double enemyPosition = new Point2D.Double(
+                getX() + Math.sin(absBearing) * event.getDistance(),
+                getY() + Math.cos(absBearing) * event.getDistance()
+        );
 
-   private String getHighestRiskTarget() {
-      // Find the robot with the highest risk score
-      String highestRiskTarget = null;
-      double highestRiskScore = Double.MIN_VALUE;
+        EnemyRobot enemy = enemies.getOrDefault(event.getName(), new EnemyRobot());
+        enemy.update(event, enemyPosition);
+        enemies.put(event.getName(), enemy);
 
-      for (Map.Entry<String, Double> entry : enemies.entrySet()) {
-         if (entry.getValue() > highestRiskScore) {
-            highestRiskTarget = entry.getKey();
-            highestRiskScore = entry.getValue();
-         }
-      }
-      return highestRiskTarget;
-   }
+        if (targetEnemy == null || enemy.isHigherPriorityThan(targetEnemy)) {
+            targetEnemy = enemy;
+        }
 
-   private double calculateRisk(double distance, double energy) {
-      // Simple risk calculation: prioritize closer and lower-energy targets
-      return (1000 - distance) + (100 - energy);
-   }
+        if (targetEnemy != null && targetEnemy.getName().equals(event.getName())) {
+            double gunTurn = Utils.normalRelativeAngle(absBearing - getGunHeadingRadians());
+            setTurnGunRightRadians(gunTurn);
 
-   public void onScannedRobot(ScannedRobotEvent e) {
-      // Update or add the scanned robot's risk score
-      double risk = calculateRisk(e.getDistance(), e.getEnergy());
-      enemies.put(e.getName(), risk);
+            if (getGunHeat() == 0) {
+                double firePower = Math.min(400 / event.getDistance(), 3);
+                setFire(firePower);
+            }
 
-      // If the scanned robot is too close, evade
-      if (e.getDistance() < 50) {
-         this.back(100.0);
-         this.turnRight(90.0);
-      }
+            setTurnRadarRightRadians(Utils.normalRelativeAngle(absBearing - getRadarHeadingRadians()) * 2);
+        }
+    }
 
-      // If the scanned robot is our current target, adjust actions
-      if (target != null && target.equals(e.getName())) {
-         double bearing = e.getBearing();
-         double gunTurn = normalizeAngle(this.getHeading() - this.getGunHeading() + bearing);
-         double radarTurn = normalizeAngle(this.getHeading() - this.getRadarHeading() + bearing);
-         this.turnGunRight(gunTurn);
-         this.turnRadarRight(radarTurn);
-         this.fire(3.0);
-      }
-   }
+    public void onRobotDeath(RobotDeathEvent event) {
+        if (targetEnemy != null && targetEnemy.getName().equals(event.getName())) {
+            targetEnemy = null; // Reset target on death
+        }
+        enemies.remove(event.getName());
+    }
 
-   public void onHitByBullet(HitByBulletEvent e) {
-      this.back(50.0); // Move back to evade
-   }
+    private void moveStrategically() {
+        double x = getX();
+        double y = getY();
 
-   public void onHitWall(HitWallEvent e) {
-      this.back(50.0); // Back off from the wall
-      this.turnRight(90.0); // Turn away from the wall
-   }
+        if (x < WALL_BUFFER || x > getBattleFieldWidth() - WALL_BUFFER ||
+            y < WALL_BUFFER || y > getBattleFieldHeight() - WALL_BUFFER) {
+            // Avoid walls
+            setTurnRight(90);
+            setAhead(100);
+        } else if (targetEnemy != null) {
+            // Move towards or away from the target based on distance
+            double distance = targetEnemy.getDistance();
+            if (distance > 200) {
+                setAhead(100); // Move closer
+            } else {
+                setBack(100); // Move away
+            }
+        }
+    }
 
-   public void onHitRobot(HitRobotEvent e) {
-      this.back(100.0); // Back off immediately
-      this.turnRight(90.0); // Turn away from the robot
-   }
+    private static class EnemyRobot {
+        private String name;
+        private double energy;
+        private double distance;
+        private Point2D.Double position;
 
-   private void avoidWalls() {
-      // Check the robot's position and adjust to avoid hitting walls
-      double battlefieldWidth = getBattleFieldWidth();
-      double battlefieldHeight = getBattleFieldHeight();
-      double x = getX();
-      double y = getY();
-      double margin = 50.0; // Distance to maintain from walls
+        public void update(ScannedRobotEvent event, Point2D.Double position) {
+            this.name = event.getName();
+            this.energy = event.getEnergy();
+            this.distance = event.getDistance();
+            this.position = position;
+        }
 
-      if (x < margin || x > battlefieldWidth - margin || y < margin || y > battlefieldHeight - margin) {
-         this.turnRight(90.0); // Turn away from the wall
-         this.back(50.0); // Move back to avoid collision
-      }
-   }
+        public boolean isHigherPriorityThan(EnemyRobot other) {
+            return this.energy < other.energy || this.distance < other.distance;
+        }
 
-   private void movement() {
-      Random random = new Random();
-      int randomTurn = random.nextInt(90) - 45; // Turn randomly between -45 and 45 degrees
-      this.turnRight(randomTurn);
-      this.ahead(50.0); // Move forward
-   }
+        public String getName() {
+            return name;
+        }
 
-   private double normalizeAngle(double angle) {
-      // Normalize an angle to be within -180 to 180 degrees
-      while (angle > 180) angle -= 360;
-      while (angle < -180) angle += 360;
-      return angle;
-   }
+        public double getDistance() {
+            return distance;
+        }
+    }
 }
